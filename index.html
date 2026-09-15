@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Flashcards de inglés</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: #f4f3ee;
+    color: #222;
+    margin: 0;
+    padding: 2rem 1rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+  }
+  h1 { font-size: 22px; font-weight: 600; margin: 0 0 1.5rem; }
+  .panel {
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 12px;
+    padding: 1.5rem;
+    width: 100%;
+    max-width: 480px;
+    margin-bottom: 1.5rem;
+  }
+  .panel h2 { font-size: 15px; font-weight: 600; margin: 0 0 10px; }
+  label { font-size: 13px; color: #555; display: block; margin-bottom: 4px; }
+  input[type="password"], input[type="text"], textarea {
+    width: 100%; padding: 8px 10px; border: 1px solid #ccc; border-radius: 6px;
+    font-size: 14px; font-family: inherit;
+  }
+  textarea { resize: vertical; min-height: 120px; }
+  .row { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+  button {
+    background: #fff; border: 1px solid #ccc; border-radius: 8px;
+    padding: 8px 14px; cursor: pointer; font-size: 14px;
+  }
+  button:hover { background: #f0f0f0; }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-primary { background: #2e7d32; color: #fff; border: none; font-weight: 600; }
+  .btn-primary:hover { background: #276b2b; }
+  #fileName { font-size: 13px; color: #666; margin-left: 8px; }
+  #maxWordsRow { margin-top: 10px; }
+  #maxWords { width: 70px; }
+  #progressWrap { margin-top: 12px; display: none; }
+  progress { width: 100%; height: 10px; }
+  #statusText { font-size: 13px; color: #555; margin-top: 6px; }
+
+  #studySection { display: none; width: 100%; max-width: 480px; }
+  #card {
+    background: #fff; border: 1px solid #ddd; border-radius: 12px;
+    padding: 2.5rem 1.5rem; min-height: 200px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    text-align: center; cursor: pointer; user-select: none;
+  }
+  #word { font-size: 26px; font-weight: 600; margin-bottom: 12px; }
+  #hint { font-size: 13px; color: #888; margin-top: 10px; }
+  #trans { font-size: 22px; font-weight: 600; color: #2e7d32; margin-bottom: 6px; }
+  #def { font-size: 13px; color: #666; font-style: italic; margin-bottom: 14px; }
+  #sentEn { font-size: 14px; border-top: 1px solid #eee; padding-top: 10px; }
+  #sentEs { font-size: 13px; color: #666; margin-top: 4px; }
+  #playBtn { border-radius: 50%; width: 40px; height: 40px; padding: 0; font-size: 18px; }
+  #controls { display: flex; align-items: center; justify-content: space-between; margin-top: 1rem; }
+  #counter { font-size: 13px; color: #777; }
+  #shuffleBtn { margin-top: 1rem; }
+  .small-note { font-size: 12px; color: #888; margin-top: 6px; }
+  #errorBox { color: #b00020; font-size: 13px; margin-top: 8px; display: none; }
+</style>
+</head>
+<body>
+
+<h1>Flashcards de inglés</h1>
+
+<div class="panel">
+  <h2>1. Tu API key de Groq</h2>
+  <label for="apiKey">Se guarda solo en este navegador (localStorage), nunca se sube a ningún lado</label>
+  <div class="row">
+    <input type="password" id="apiKey" placeholder="gsk_..." style="flex:1">
+    <button id="toggleKeyBtn" title="mostrar/ocultar">👁</button>
+  </div>
+</div>
+
+<div class="panel">
+  <h2>2. Texto o PDF</h2>
+  <div class="row">
+    <button id="pdfBtn">📄 Elegir PDF</button>
+    <input type="file" id="pdfInput" accept="application/pdf" style="display:none">
+    <span id="fileName">ningún PDF seleccionado</span>
+    <button id="clearPdfBtn" style="display:none">quitar</button>
+  </div>
+  <label style="margin-top:10px">...o pega tu texto aquí:</label>
+  <textarea id="textInput" placeholder="Pega aquí el texto en inglés..."></textarea>
+
+  <div id="maxWordsRow" class="row">
+    <label style="margin:0">Máximo de palabras:</label>
+    <input type="text" id="maxWords" value="100">
+  </div>
+
+  <div class="row" style="margin-top:14px">
+    <button class="btn-primary" id="generateBtn" style="flex:1">✨ Generar flashcards</button>
+    <button id="cancelBtn" style="display:none">Cancelar</button>
+  </div>
+
+  <div id="progressWrap">
+    <progress id="progressBar" value="0" max="100"></progress>
+    <div id="statusText"></div>
+  </div>
+  <div id="errorBox"></div>
+</div>
+
+<div id="studySection">
+  <div id="card">
+    <div id="front">
+      <div id="word"></div>
+      <button id="playBtn" title="Escuchar">🔊</button>
+      <div id="hint">toca la tarjeta para ver la traducción</div>
+    </div>
+    <div id="back" style="display:none">
+      <div id="trans"></div>
+      <div id="def"></div>
+      <div id="sentEn"></div>
+      <div id="sentEs"></div>
+    </div>
+  </div>
+  <div id="controls">
+    <button id="prevBtn">← Anterior</button>
+    <span id="counter"></span>
+    <button id="nextBtn">Siguiente →</button>
+  </div>
+  <div class="row" style="justify-content:center; margin-top:1rem; gap:10px">
+    <button id="shuffleBtn">🔀 Mezclar</button>
+    <button id="restartBtn">↺ Generar otras</button>
+  </div>
+  <p class="small-note">El audio usa la voz del navegador (gratis, no requiere internet una vez cargada la página).</p>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
+// ==================================================================
+// ESTADO Y ELEMENTOS
+// ==================================================================
+const apiKeyInput = document.getElementById('apiKey');
+const toggleKeyBtn = document.getElementById('toggleKeyBtn');
+const pdfBtn = document.getElementById('pdfBtn');
+const pdfInput = document.getElementById('pdfInput');
+const fileNameSpan = document.getElementById('fileName');
+const clearPdfBtn = document.getElementById('clearPdfBtn');
+const textInput = document.getElementById('textInput');
+const maxWordsInput = document.getElementById('maxWords');
+const generateBtn = document.getElementById('generateBtn');
+const cancelBtn = document.getElementById('cancelBtn');
+const progressWrap = document.getElementById('progressWrap');
+const progressBar = document.getElementById('progressBar');
+const statusText = document.getElementById('statusText');
+const errorBox = document.getElementById('errorBox');
+const studySection = document.getElementById('studySection');
+
+let pdfFile = null;
+let cancelado = false;
+let procesando = false;
+
+// Restaurar API key guardada
+const savedKey = localStorage.getItem('groq_api_key');
+if (savedKey) apiKeyInput.value = savedKey;
+
+apiKeyInput.addEventListener('input', () => {
+  localStorage.setItem('groq_api_key', apiKeyInput.value.trim());
+});
+
+toggleKeyBtn.addEventListener('click', () => {
+  apiKeyInput.type = apiKeyInput.type === 'password' ? 'text' : 'password';
+});
+
+pdfBtn.addEventListener('click', () => pdfInput.click());
+
+pdfInput.addEventListener('change', () => {
+  if (pdfInput.files.length > 0) {
+    pdfFile = pdfInput.files[0];
+    fileNameSpan.textContent = pdfFile.name;
+    clearPdfBtn.style.display = 'inline-block';
+    textInput.value = '';
+    textInput.disabled = true;
+  }
+});
+
+clearPdfBtn.addEventListener('click', () => {
+  pdfFile = null;
+  pdfInput.value = '';
+  fileNameSpan.textContent = 'ningún PDF seleccionado';
+  clearPdfBtn.style.display = 'none';
+  textInput.disabled = false;
+});
+
+// ==================================================================
+// EXTRAER TEXTO DE PDF
+// ==================================================================
+async function extraerTextoPDF(file) {
+  const arrayBuffer = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  let textoCompleto = '';
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const content = await page.getTextContent();
+    const textoPagina = content.items.map(item => item.str).join(' ');
+    textoCompleto += textoPagina + '\n';
+  }
+  return textoCompleto;
+}
+
+// ==================================================================
+// EXTRAER PALABRAS ÚNICAS + ORACIÓN DE CONTEXTO
+// ==================================================================
+const STOPWORDS = new Set([
+  "the", "a", "an", "and", "or", "but", "is", "are", "was", "were", "be",
+  "been", "being", "in", "on", "at", "to", "for", "of", "with", "as",
+  "by", "this", "that", "these", "those", "it", "its", "i", "you", "he",
+  "she", "we", "they", "them", "his", "her", "their", "our", "your",
+  "not", "no", "so", "if", "then", "than", "too", "very", "can", "will",
+  "just", "do", "does", "did", "have", "has", "had", "there", "here",
+]);
+
+function dividirOraciones(texto) {
+  return texto.split(/(?<=[.!?])\s+/).map(s => s.trim()).filter(Boolean);
+}
+
+function extraerPalabrasConContexto(texto, maxPalabras) {
+  const oraciones = dividirOraciones(texto);
+  const vistas = new Map();
+
+  for (const oracion of oraciones) {
+    const palabras = oracion.match(/[a-zA-Z']+/g) || [];
+    for (const palabra of palabras) {
+      const lower = palabra.toLowerCase();
+      if (lower.length < 3) continue;
+      if (STOPWORDS.has(lower)) continue;
+      if (!vistas.has(lower)) vistas.set(lower, oracion);
+    }
+  }
+
+  const items = Array.from(vistas.entries());
+  return items.slice(0, maxPalabras);
+}
+
+// ==================================================================
+// TRADUCIR CON GROQ
+// ==================================================================
+async function traducirConGroq(apiKey, palabra, oracion) {
+  const prompt = `Eres un asistente que ayuda a estudiantes hispanohablantes a aprender inglés.
+
+Palabra en inglés: "${palabra}"
+Oración donde aparece: "${oracion}"
+
+Responde SOLO con un JSON válido (sin texto adicional, sin markdown, sin backticks) con este formato exacto:
+{
+  "traduccion": "traducción al español de la palabra EN ESE CONTEXTO",
+  "definicion_corta": "definición breve en español (máximo 10 palabras)",
+  "oracion_traducida": "traducción al español de la oración de ejemplo"
+}`;
+
+  const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: 'openai/gpt-oss-120b',
+      messages: [{ role: 'user', content: prompt }],
+      temperature: 0.3,
+    }),
+  });
+
+  if (!response.ok) {
+    const errBody = await response.text();
+    throw new Error(`Groq API error ${response.status}: ${errBody.slice(0, 200)}`);
+  }
+
+  const data = await response.json();
+  let contenido = data.choices[0].message.content.trim();
+  contenido = contenido.replace(/^```json|^```|```$/gm, '').trim();
+  return JSON.parse(contenido);
+}
+
+// ==================================================================
+// PIPELINE PRINCIPAL
+// ==================================================================
+let flashcards = [];
+let order = [];
+let pos = 0;
+let flipped = false;
+
+generateBtn.addEventListener('click', async () => {
+  if (procesando) return;
+
+  errorBox.style.display = 'none';
+  const apiKey = apiKeyInput.value.trim();
+  if (!apiKey) {
+    mostrarError('Pega tu API key de Groq antes de continuar.');
+    return;
+  }
+
+  let texto = '';
+  try {
+    if (pdfFile) {
+      statusText.textContent = 'Leyendo PDF...';
+      progressWrap.style.display = 'block';
+      texto = await extraerTextoPDF(pdfFile);
+    } else {
+      texto = textInput.value.trim();
+    }
+  } catch (e) {
+    mostrarError('No se pudo leer el PDF: ' + e.message);
+    return;
+  }
+
+  if (!texto) {
+    mostrarError('Sube un PDF o pega texto para continuar.');
+    return;
+  }
+
+  const maxWords = parseInt(maxWordsInput.value, 10) || 100;
+  const palabrasConContexto = extraerPalabrasConContexto(texto, maxWords);
+
+  if (palabrasConContexto.length === 0) {
+    mostrarError('No se encontraron palabras válidas en el texto.');
+    return;
+  }
+
+  procesando = true;
+  cancelado = false;
+  generateBtn.disabled = true;
+  cancelBtn.style.display = 'inline-block';
+  progressWrap.style.display = 'block';
+  progressBar.max = palabrasConContexto.length;
+  progressBar.value = 0;
+
+  flashcards = [];
+
+  for (let i = 0; i < palabrasConContexto.length; i++) {
+    if (cancelado) break;
+
+    const [palabra, oracion] = palabrasConContexto[i];
+    statusText.textContent = `[${i + 1}/${palabrasConContexto.length}] Procesando "${palabra}"...`;
+    progressBar.value = i + 1;
+
+    try {
+      const data = await traducirConGroq(apiKey, palabra, oracion);
+      flashcards.push({
+        word: palabra,
+        translation: data.traduccion || '',
+        definition: data.definicion_corta || '',
+        sentence_en: oracion,
+        sentence_es: data.oracion_traducida || '',
+      });
+    } catch (e) {
+      console.warn(`Error traduciendo "${palabra}":`, e);
+      // si falla la key o hay un error grave, cortamos para no seguir gastando llamadas
+      if (e.message.includes('401') || e.message.includes('403')) {
+        mostrarError('Tu API key parece inválida. Revisa que esté bien copiada.');
+        break;
+      }
+    }
+  }
+
+  procesando = false;
+  generateBtn.disabled = false;
+  cancelBtn.style.display = 'none';
+  progressWrap.style.display = 'none';
+
+  if (flashcards.length > 0) {
+    statusText.textContent = `Listo: ${flashcards.length} tarjetas generadas.`;
+    iniciarEstudio();
+  } else if (!cancelado) {
+    mostrarError('No se generó ninguna tarjeta. Revisa tu API key o el texto.');
+  }
+});
+
+cancelBtn.addEventListener('click', () => {
+  cancelado = true;
+  statusText.textContent = 'Cancelando...';
+});
+
+function mostrarError(msg) {
+  errorBox.textContent = msg;
+  errorBox.style.display = 'block';
+}
+
+// ==================================================================
+// MODO ESTUDIO
+// ==================================================================
+function iniciarEstudio() {
+  order = flashcards.map((_, i) => i);
+  pos = 0;
+  flipped = false;
+  studySection.style.display = 'block';
+  renderCard();
+  studySection.scrollIntoView({ behavior: 'smooth' });
+}
+
+function currentCard() {
+  return flashcards[order[pos]];
+}
+
+function renderCard() {
+  const it = currentCard();
+  document.getElementById('word').textContent = it.word;
+  document.getElementById('trans').textContent = it.translation;
+  document.getElementById('def').textContent = it.definition;
+  document.getElementById('sentEn').textContent = it.sentence_en;
+  document.getElementById('sentEs').textContent = it.sentence_es;
+  document.getElementById('counter').textContent = `${pos + 1} / ${flashcards.length}`;
+  document.getElementById('front').style.display = flipped ? 'none' : 'block';
+  document.getElementById('back').style.display = flipped ? 'block' : 'none';
+}
+
+document.getElementById('card').addEventListener('click', (e) => {
+  if (e.target.id === 'playBtn') return;
+  flipped = !flipped;
+  renderCard();
+});
+
+document.getElementById('playBtn').addEventListener('click', (e) => {
+  e.stopPropagation();
+  const it = currentCard();
+  const utterance = new SpeechSynthesisUtterance(it.word);
+  utterance.lang = 'en-US';
+  speechSynthesis.cancel();
+  speechSynthesis.speak(utterance);
+});
+
+document.getElementById('prevBtn').addEventListener('click', () => {
+  pos = (pos - 1 + flashcards.length) % flashcards.length;
+  flipped = false;
+  renderCard();
+});
+
+document.getElementById('nextBtn').addEventListener('click', () => {
+  pos = (pos + 1) % flashcards.length;
+  flipped = false;
+  renderCard();
+});
+
+document.getElementById('shuffleBtn').addEventListener('click', () => {
+  for (let i = order.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [order[i], order[j]] = [order[j], order[i]];
+  }
+  pos = 0;
+  flipped = false;
+  renderCard();
+});
+
+document.getElementById('restartBtn').addEventListener('click', () => {
+  studySection.style.display = 'none';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+});
+</script>
+
+</body>
+</html>
